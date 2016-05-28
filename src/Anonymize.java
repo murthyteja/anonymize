@@ -10,6 +10,8 @@ public class Anonymize {
 	public static void main(String[] args) throws ClassNotFoundException, SQLException, UnsupportedEncodingException {
 		// TODO Auto-generated method stub
 		System.out.println("This is my first Java program");
+		// Initialize Application Properties Object
+		AppProperties app = new AppProperties();
 		Class.forName("net.ucanaccess.jdbc.UcanaccessDriver");
 		Connection conn = DriverManager.getConnection("jdbc:ucanaccess://C:/Users/murthyteja/Desktop/Database1.accdb");
 		DatabaseMetaData md = conn.getMetaData();
@@ -21,6 +23,7 @@ public class Anonymize {
 		String str = Encrypt.encodeString("Sample dude");
 		System.out.println(str);
 		System.out.println(Encrypt.decodeString(str));
+		System.out.println(app.getProperty("number_divisor"));
 	}
 
 }
