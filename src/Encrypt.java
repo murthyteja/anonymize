@@ -13,4 +13,12 @@ public class Encrypt {
 		byte[] decodedBytes = Base64.getDecoder().decode(input.getBytes());
 		return new String(decodedBytes, "UTF-8");
 	}
+	
+	public static double encodeDouble(double number){
+		return number/12;
+	}
+
+	public static double decodeDouble(double number){
+		return number * 12;
+	}
 }
