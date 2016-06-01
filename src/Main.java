@@ -9,11 +9,14 @@ public class Main {
 		// Initialize Application Properties Object
 		AppProperties app = new AppProperties();
 		
-		
 		String str = Encrypt.encodeString("Sample dude");
 		System.out.println(str);
 		System.out.println(Encrypt.decodeString(str));
 		System.out.println(app.getProperty("number_divisor"));
+		
+		// Initialize the Data Source Object
+		DataSource ds = new DataSource();
+		Anonymize.anonymizeDatabase(ds.conn);
 	}
 
 }
