@@ -17,6 +17,8 @@ public class Main {
 		// Initialize the Data Source Object
 		DataSource ds = new DataSource();
 		Anonymize.anonymizeDatabase(ds.conn);
+		ErrorLogger el = new ErrorLogger();
+		el.write("Testing Log");
 	}
 
 }
