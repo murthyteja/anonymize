@@ -1,6 +1,7 @@
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 
@@ -16,18 +17,17 @@ public class Anonymize {
 		System.out.println("Comes here to anonymize: " + tableName);
 		String sqlQuery = "select * from " + tableName;
 		try {
-			DatabaseMetaData md = conn.getMetaData();
 			Statement st = conn.createStatement();
 			ResultSet baseSet = st.executeQuery(sqlQuery);
-			ResultSet columns = md.getColumns(null, null, tableName, null);
-			System.out.println(columns);
-			while(columns.next()){
-				System.out.println(columns.getString("COLUMN_NAME"));
-				System.out.println(columns.getString("TYPE_NAME"));
+			if (baseSet != null){
+				ResultSetMetaData rsmd = baseSet.getMetaData();
+				int i = 0;
+				while(i < rsmd.getColumnCount()){
+					i++;
+					System.out.println(rsmd.getColumnName(i) + ":------" + rsmd.getColumnTypeName(i));
+				}
 			}
-			while(baseSet.next()){
-				System.out.println(baseSet.getString(2));
-			}
+			baseSet.close();
 		} catch (SQLException e) {
 			// TODO Auto-generated catch block
 			System.out.println("Something went wrong: " + e.getMessage());
