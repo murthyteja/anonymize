@@ -4,6 +4,7 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.List;
 
 public class Anonymize {
 	
@@ -35,17 +36,24 @@ public class Anonymize {
 		return true;
 	}
 
-	public static boolean anonymizeDatabase(Connection conn){
+	public static boolean anonymizeDatabase(Connection conn, List<String> ignoreTablesList){
 		boolean result = false;
+		System.out.println("Tables to be ignored are:");
+		for(int i=0; i<ignoreTablesList.size();i++){
+			System.out.println(ignoreTablesList.get(i));
+		}
 		try{
 			DatabaseMetaData md = conn.getMetaData();
 			ResultSet rs = md.getTables(null, null, "%", null);
 			System.out.println("Tables to be anonymized are:");
 			while (rs.next()){
 				String tableName = rs.getString(3);
-				System.out.println(tableName);
-				System.out.println("================================");
-				anonymizeTable(conn, tableName);
+				// We should not anonymize the tables in Ignored List
+				if(!ignoreTablesList.contains(tableName)){
+					System.out.println(tableName);
+					System.out.println("================================");
+					anonymizeTable(conn, tableName);
+				}
 			}
 		}
 		catch(Exception exp) {
