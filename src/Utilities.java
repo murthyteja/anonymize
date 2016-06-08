@@ -15,6 +15,21 @@ public class Utilities {
 		Matcher m = emailPattern.matcher(string);
 		return m.matches();
 	}
+	
+	/*
+	* Get the primary key in the given table
+	*
+	*/
+	public static String getPrimaryKey(DatabaseMetaData dmd, String tableName){
+		ResultSet rs = null;
+		String conditionalPrimaryKey = null;
+		rs = dmd.getPrimaryKeys(null, null, tableName);
+		while (rs.next()) {
+			conditionalPrimaryKey = rs.getString("COLUMN_NAME");
+			break;
+		}
+		return condictionalPrimayKey;
+	}
 
 	
 }
