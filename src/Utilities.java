@@ -1,3 +1,6 @@
+import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -20,7 +23,7 @@ public class Utilities {
 	* Get the primary key in the given table
 	*
 	*/
-	public static String getPrimaryKey(DatabaseMetaData dmd, String tableName){
+	public static String getPrimaryKey(DatabaseMetaData dmd, String tableName) throws SQLException{
 		ResultSet rs = null;
 		String conditionalPrimaryKey = null;
 		rs = dmd.getPrimaryKeys(null, null, tableName);
@@ -28,8 +31,6 @@ public class Utilities {
 			conditionalPrimaryKey = rs.getString("COLUMN_NAME");
 			break;
 		}
-		return condictionalPrimayKey;
+		return conditionalPrimaryKey;
 	}
-
-	
 }

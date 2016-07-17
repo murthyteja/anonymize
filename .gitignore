@@ -1,2 +1,3 @@
 # Ignore all the log files
 *.log
+*.class
