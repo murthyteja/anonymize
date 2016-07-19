@@ -50,9 +50,11 @@ public class Anonymize {
 				String tableName = rs.getString(3);
 				// We should not anonymize the tables in Ignored List
 				if(!ignoreTablesList.contains(tableName)){
-					System.out.println(tableName);
 					System.out.println("================================");
+					System.out.println(tableName);
+					System.out.println(Utilities.getPrimaryKey(md, tableName));
 					anonymizeTable(conn, tableName);
+					System.out.println("================================");
 				}
 			}
 		}
