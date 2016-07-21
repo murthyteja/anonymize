@@ -6,25 +6,54 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 // This is where all the action happens
 public class Anonymize {
+	static Statement statement;
 
-	@SuppressWarnings("unused")
-	private boolean anonymizeRow(ResultSet currentRow){
+	private static boolean anonymizeRow(Connection conn, String query){
+		try{
+			statement = conn.createStatement();
+			boolean status = statement.execute(query);
+			System.out.print("''''''''''''''''''''''''''''''");
+			System.out.print(query);
+			System.out.print("Result of the Query is: " + status);
+			System.out.print("''''''''''''''''''''''''''''''");
+		}
+		catch(Exception exp){
+			System.out.println("Something went wrong:" + exp.getMessage());
+		}
 		return true;
 	}
 	
 	/*
 	 * This method frames the update query to anonymize a given record
 	 */
-	private static String getUpdateQuery(String tableName, String primaryKeyName, int primaryKeyValue, String conditions){
+	private static String getUpdateQuery(String tableName, String primaryKeyName, Object primaryKeyValue, String conditions){
 		String baseQuery = "update " + tableName + " set ";
-		baseQuery += conditions;
-		baseQuery += " where ";
-		baseQuery += primaryKeyName + " = " + primaryKeyValue;
+		/*
+		 * This conditions string will have a Comma character at the end. We need to remove this
+		 */
+		conditions = conditions.substring(0, conditions.length()-1 );
+		baseQuery = baseQuery + conditions + " where " + primaryKeyName + "=";
+		if(primaryKeyValue instanceof String)
+		{
+			baseQuery += "'" + primaryKeyValue.toString() + "'";
+		}
+		else if(primaryKeyValue instanceof Integer){
+			baseQuery += Integer.parseInt(primaryKeyValue.toString());
+		}
+		else if(primaryKeyValue instanceof Date)
+		{
+			baseQuery += "'" + primaryKeyValue.toString() + "'";
+		}
+		else
+		{
+			baseQuery += "'" + primaryKeyValue.toString() + "'";
+		}
 		return baseQuery;
 	}
 
@@ -64,40 +93,56 @@ public class Anonymize {
 			 * # TODO: Run java equivalent bench mark tests and check for the performance
 			 * of this module given the size of  the database
 			 */
-			//Map<String, String> rowDetails;
 			String conditionsQuery = "";
-			int primaryKeyValue = 0;
+			String columnDataType;
+			String updateQuery = "";
+			String primaryKeyDataType;
+			Object primaryKeyValue;
 			while(baseSet.next()){
 				// baseSet has the next row in scope now
-				// anonymizeRow(baseSet, columnDetails);
-				// rowDetails = new HashMap<String, String>();
-				//primaryKeyValue = baseSet.getInt(primaryKey);
+				primaryKeyDataType = allColumnDetails.get(primaryKey);
+				System.out.println("=========================================");
+				System.out.println(primaryKeyDataType);
+				System.out.println("=========================================");
+				if(primaryKeyDataType == "VARCHAR")
+				{
+					primaryKeyValue = baseSet.getString(primaryKey);
+				}
+				else if(primaryKeyDataType == "INTEGER"){
+					primaryKeyValue = baseSet.getInt(primaryKey);
+				}
+				else if(primaryKeyDataType == "TIMESTAMP")
+				{
+					primaryKeyValue = baseSet.getDate(primaryKey);
+				}
+				else
+				{
+					primaryKeyValue = baseSet.getString(primaryKey);
+				}
+				// Frame conditions query for the given set of columns
 				for(String columnName : columnsList){
-					String columnDataType = allColumnDetails.get(columnName);
-					
-					System.out.println(columnDataType + "-----" + columnName);
+					columnDataType = allColumnDetails.get(columnName);
 					/*
 					 * Consider numbers in the below logic
 					 */
 					if (columnDataType != null){
 						if(columnDataType == "VARCHAR"){
+							//System.out.println();
 							conditionsQuery += (columnName + "=" + "'" + Encrypt.encodeString(baseSet.getString(columnName)) + "' ,");
-						}else{
+						}
+						else
+						{
 							System.out.println("Description column not available in table - " + tableName);
 						}
-//							
-//						switch (columnDataType){
-//							case "VARCHAR": conditionsQuery += (columnName + "=" + "'" + Encrypt.encodeString(baseSet.getString(columnName)) + "' ,");
-//											break;
-//							default: System.out.println("Description column not available in table - " + tableName);
-//									 break;
-//						}
 					}
 				}
-				System.out.println("----------------------------");
-				System.out.println(getUpdateQuery(tableName, primaryKey, primaryKeyValue, conditionsQuery));
-				//System.out.println(conditionsQuery);
-				System.out.println("----------------------------");
+				if(!conditionsQuery.isEmpty()){
+					System.out.println(getUpdateQuery(tableName, primaryKey, primaryKeyValue, conditionsQuery));
+					updateQuery = getUpdateQuery(tableName, primaryKey, primaryKeyValue, conditionsQuery);
+					@SuppressWarnings("unused")
+					boolean status = anonymizeRow(conn, updateQuery);
+				}
+				conditionsQuery = "";
 			}
 			baseSet.close();
 		} catch (SQLException e) {
@@ -117,6 +162,10 @@ public class Anonymize {
 			// The below list contains the column names to be anonymized
 			List<String> columnsList = new ArrayList<String>();
 			columnsList.add("Description");
+			columnsList.add("Name");
+			columnsList.add("AddressStreet");
+			columnsList.add("FriendlyDescription");
+			columnsList.add("FriendlyFutureDescription");
 			while (rs.next()){
 				/*
 				 * #TODO: The line beneath is shitty. Look for a better way to retrieve
@@ -137,6 +186,7 @@ public class Anonymize {
 		}
 		catch(Exception exp) {
 			System.out.println("Something went wrong: " + exp.getMessage());
+			exp.printStackTrace();
 		}
 		return result;
 	}
