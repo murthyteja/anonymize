@@ -1,6 +1,8 @@
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -21,16 +23,19 @@ public class Utilities {
 	
 	/*
 	* Get the primary key in the given table
-	*
+	* #TODO: Handle composite primary Keys condition
 	*/
-	public static String getPrimaryKey(DatabaseMetaData dmd, String tableName) throws SQLException{
+	public static List<String> getPrimaryKeys(DatabaseMetaData dmd, String tableName) throws SQLException{
 		ResultSet rs = null;
 		String conditionalPrimaryKey = null;
+		List<String> primaryKeys = new ArrayList<String>();
 		rs = dmd.getPrimaryKeys(null, null, tableName);
 		while (rs.next()) {
 			conditionalPrimaryKey = rs.getString("COLUMN_NAME");
-			break;
+			if(!conditionalPrimaryKey.isEmpty() && conditionalPrimaryKey != null){
+				primaryKeys.add(conditionalPrimaryKey);
+			}
 		}
-		return conditionalPrimaryKey;
+		return primaryKeys;
 	}
 }
