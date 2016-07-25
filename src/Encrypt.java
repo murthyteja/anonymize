@@ -38,16 +38,16 @@ public class Encrypt {
 		return number * divisor;
 	}
 
-	public static double encodeInteger(double number){
+	public static int encodeInteger(int number){
 		AppProperties appProperties = new AppProperties();
-		int divisor = Integer.parseInt(appProperties.getProperty("number_divisor"));
-		return number / divisor;
+		int delta = Integer.parseInt(appProperties.getProperty("delta"));
+		return (number - delta);
 	}
 
-	public static double decodeInteger(double number){
+	public static int decodeInteger(int number){
 		AppProperties appProperties = new AppProperties();
-		int divisor = Integer.parseInt(appProperties.getProperty("number_divisor"));
-		return number * divisor;
+		int delta = Integer.parseInt(appProperties.getProperty("delta"));
+		return (number + delta);
 	}
 	
 	private static String encodeEmail(String email) throws UnsupportedEncodingException{

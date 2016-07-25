@@ -60,7 +60,6 @@ public class Anonymize {
 		return baseQuery;
 	}
 
-	@SuppressWarnings("deprecation")
 	private static String getConditionForEntry(String primaryKeyname, Object primaryKeyValue){
 		String condition = primaryKeyname + "=";
 		if(primaryKeyValue instanceof String)
@@ -171,6 +170,12 @@ public class Anonymize {
 							//System.out.println();
 							conditionsQuery += (columnName + "=" + "'" + Encrypt.encodeString(baseSet.getString(columnName)) + "' ,");
 						}
+						else if(columnDataType == "INTEGER"){
+							conditionsQuery += (columnName + "=" + Integer.toString(Encrypt.encodeInteger(baseSet.getInt(columnName))) + " ,");
+						}
+						else if(columnDataType == "DOUBLE"){
+							conditionsQuery += (columnName + "=" + Double.toString(Encrypt.encodeDouble(baseSet.getDouble(columnName))) + " ,");
+						}
 						else
 						{
 							System.out.println("Description column not available in table - " + tableName);
@@ -210,6 +215,9 @@ public class Anonymize {
 			columnsList.add("FriendlyDescription");
 			columnsList.add("FriendlyFutureDescription");
 			columnsList.add("AccountName");
+			columnsList.add("Address");
+			columnsList.add("Company");
+			columnsList.add("ZIP");
 			while (rs.next()){
 				/*
 				 * #TODO: The line beneath is shitty. Look for a better way to retrieve
