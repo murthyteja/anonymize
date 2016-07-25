@@ -1,15 +1,17 @@
 import java.sql.Connection;
-import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
-import java.sql.ResultSet;
 
 public class DataSource {
 	Connection conn;
+	String driverClassPath;
+	String connectionString;
 	public DataSource(){
 		System.out.println("Constructor for Data Source");
+		driverClassPath = "net.ucanaccess.jdbc.UcanaccessDriver";
+		connectionString = "jdbc:ucanaccess://H:/Work/Anonymiye_Test/B23.mdb";
 		try{
-			Class.forName("net.ucanaccess.jdbc.UcanaccessDriver");
-			conn = DriverManager.getConnection("jdbc:ucanaccess://C:/Users/murthyteja/Desktop/Database1.accdb");
+			Class.forName(driverClassPath);
+			conn = DriverManager.getConnection(connectionString);
 		}
 		catch(Exception exp){
 			System.out.println("Something went wrong: " + exp.getMessage());
