@@ -3,41 +3,51 @@ import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
-import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import javax.print.attribute.standard.DateTimeAtCompleted;
-// This is where all the action happens
+// This is where all the awesome action happens
 public class Anonymize {
 	static Statement statement;
 
+	/*
+	 * Private: Method that anonymizes a row in the database.
+	 * 
+	 * Parameter Description:
+	 * 			conn - The connection object to the underlying database
+	 * 			query - The SQL query string that gets executed on the underlying
+	 * 					database. This is usually an update query
+	 */
 	private static boolean anonymizeRow(Connection conn, String query){
+		boolean queryExecutionStatus = false;
 		try{
 			statement = conn.createStatement();
-			boolean status = statement.execute(query);
-			System.out.print("''''''''''''''''''''''''''''''");
-			System.out.print(query);
-			System.out.print("Result of the Query is: " + status);
-			System.out.print("''''''''''''''''''''''''''''''");
+			queryExecutionStatus = statement.execute(query);
 		}
 		catch(Exception exp){
 			System.out.println("Something went wrong:" + exp.getMessage());
 		}
-		return true;
+		return queryExecutionStatus;
 	}
 	
 	/*
-	 * This method frames the update query to anonymize a given record
+	 * Private: This method frames the update query to anonymize a given record
+	 * 
+	 * Parameter Description:
+	 * 			tableName - The name of the table which is being anonymized
+	 * 			primaryKeyValueMap - A Hashmap containing all primary keys and their values for a given row
+	 * 			conditions - A conditional query which basically sets the selected columns data to 
+	 * 						anonymized values
 	 */
 	private static String getUpdateQuery(String tableName, Map<String, Object> primaryKeyValueMap, String conditions){
-		String baseQuery = "update " + tableName + " set ";
+		AppProperties appProperties = new AppProperties();
+		String baseQuery = appProperties.getProperty("UPDATE_CLAUSE") + tableName + appProperties.getProperty("SET_CLAUSE");
+		
 		/*
 		 * This conditions string will have a Comma character at the end. We need to remove this
 		 */
@@ -45,23 +55,45 @@ public class Anonymize {
 		baseQuery = baseQuery + conditions + getWhereQuery(primaryKeyValueMap);
 		return baseQuery;
 	}
-	
+
+	/*
+	 * Private: Method that prepares the where clause in the update query for anonymizing
+	 * 			a given row
+	 * 
+	 * Parameter Description:
+	 * 			primaryKeyValueMap - This is a HashMap that contains the primary key names
+	 * 								and their values in a given row
+	 */
 	private static String getWhereQuery(Map<String, Object> primaryKeyValueMap){
-		String baseQuery = "where ";
+		AppProperties appProperties = new AppProperties();
+		String baseQuery = appProperties.getProperty("WHERE_CLAUSE");
+		String groupConditionsClause = appProperties.getProperty("GROUP_CONDITIONS_CLAUSE");
 		int primaryKeysCount = primaryKeyValueMap.size();
-		System.out.println(primaryKeysCount);
+
 		for (Map.Entry<String, Object> primaryKeyValueEntry : primaryKeyValueMap.entrySet()) {
 			baseQuery += getConditionForEntry(primaryKeyValueEntry.getKey(), primaryKeyValueEntry.getValue());
 			if(primaryKeysCount > 1 && (primaryKeysCount - 1 ) > 0){
-				baseQuery += " AND ";
+				baseQuery += groupConditionsClause;
 				primaryKeysCount--;
 			}
 		}
 		return baseQuery;
 	}
 
-	private static String getConditionForEntry(String primaryKeyname, Object primaryKeyValue){
-		String condition = primaryKeyname + "=";
+	/*
+	 * Private: This method frames the right conditional statement based on the data type of
+	 * 			a given primary key value. If the value is a NUMBER, then we will get a String like
+	 * 			this: attribute=NUMBER_VALUE.
+	 * 
+	 * 			If the value is a string. We might have to encode the same in quotes. Hence the output
+	 * 			would look like attribute='STRING_VALUE'
+	 * 
+	 * Parameter Description:
+	 * 			primaryKeyName - Name of the primary key attribute
+	 * 			primaryKeyValue - Value of the primary key attribute in a given row 
+	 */
+	private static String getConditionForEntry(String primaryKeyName, Object primaryKeyValue){
+		String condition = primaryKeyName + "=";
 		if(primaryKeyValue instanceof String)
 		{
 			condition += "'" + primaryKeyValue.toString() + "'";
@@ -86,8 +118,9 @@ public class Anonymize {
 		}
 		return condition;
 	}
-	
-	/*
+
+	/* Private: This method that gets invoked for anonymizing a given table
+	 * 
 	 * Parameter Description:
 	 * 		conn - This is the basic connection object
 	 * 		tableName - The table that is currently in scope for anonymization
@@ -96,15 +129,13 @@ public class Anonymize {
 	 * 		primaryKey - Primary key of the given table
 	 */
 	private static boolean anonymizeTable(Connection conn, String tableName, List<String> columnsList, List<String> primaryKeys) throws UnsupportedEncodingException{
+		AppProperties appProperties = new AppProperties();
 		// First frame a result set with all the data in the table
 		System.out.println("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^");
 		System.out.println("Comes here to anonymize: " + tableName);
-		System.out.println("The primary keys in this table are:");
-		for ( String primaryKey : primaryKeys){
-			System.out.println(primaryKey);
-		}
 		// Frame the base query to get all the records
-		String sqlQuery = "select * from " + tableName;
+		//String sqlQuery = "select * from " + tableName;
+		String sqlQuery = appProperties.getProperty("SELECT_ALL_CLAUSE") + tableName;
 		try {
 			Statement st = conn.createStatement();
 			ResultSet baseSet = st.executeQuery(sqlQuery);
@@ -183,7 +214,6 @@ public class Anonymize {
 					}
 				}
 				if(!conditionsQuery.isEmpty()){
-					System.out.println(conditionsQuery);
 					System.out.println(getUpdateQuery(tableName, primaryKeyValueMap, conditionsQuery));
 					updateQuery = getUpdateQuery(tableName, primaryKeyValueMap, conditionsQuery);
 					@SuppressWarnings("unused")
@@ -200,6 +230,17 @@ public class Anonymize {
 		return true;
 	}
 
+	/*
+	 * Public: Method that anonymizes a given database.
+	 * 
+	 * Parameter Description:
+	 * 				conn - The connection object to connect and alter the underlying
+	 * 						database
+	 * 				ignoreTablesList - List of tables that we would like to ignore
+	 * 						during our anonymization. In most of the applications, we
+	 * 						might have settings data in a table named 'Settings'. We might
+	 * 						want to ignore such tables.
+	 */
 	public static boolean anonymizeDatabase(Connection conn, List<String> ignoreTablesList){
 		boolean result = false;
 		try{
@@ -215,9 +256,10 @@ public class Anonymize {
 			columnsList.add("FriendlyDescription");
 			columnsList.add("FriendlyFutureDescription");
 			columnsList.add("AccountName");
-			columnsList.add("Address");
-			columnsList.add("Company");
-			columnsList.add("ZIP");
+			columnsList.add("Quanitity");
+			columnsList.add("CostValueAmountinInstrumentCurrency");
+			columnsList.add("AccountBalanceInAccountCurrency");
+			columnsList.add("AccountBalanceInFundCurrency");
 			while (rs.next()){
 				/*
 				 * #TODO: The line beneath is shitty. Look for a better way to retrieve
@@ -225,6 +267,7 @@ public class Anonymize {
 				 */
 				String tableName = rs.getString(3);
 				primaryKeys = Utilities.getPrimaryKeys(md, tableName);
+
 				/*
 				 * We should not anonymize the tables in Ignored List
 				 * Also, for tables without a primary key(s), do not do anonymization
