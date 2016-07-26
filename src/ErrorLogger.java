@@ -32,11 +32,12 @@ public class ErrorLogger {
 		fh.setFormatter(formatter);
 	}
 
-	/*
-	 * This instance method writes to the Log file
+	/* Public: This instance method writes to the Log file
+	 * 
+	 * Parameter Description:
+	 * 			message: Message to be written to the error log
 	 */
 	public void write(String message) {
 		log.info(message);
 	}
-
 }
