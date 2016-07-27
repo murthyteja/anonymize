@@ -1,3 +1,13 @@
+/*
+ * Author: Sri Murthy Upadhyayula
+ * 
+ * BIL ID: XQW9X
+ * 
+ * Class Description:
+ * 				This is the module where the entire process logic for database
+ * anonymization resides
+ * 
+ */
 import java.io.UnsupportedEncodingException;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -14,7 +24,7 @@ import java.util.Map;
 // This is where all the awesome action happens
 public class Anonymize {
 	static Statement statement;
-
+	static ErrorLogger errorLogger = new ErrorLogger();
 	/*
 	 * Private: Method that anonymizes a row in the database.
 	 * 
@@ -167,20 +177,17 @@ public class Anonymize {
 				// Get the column type information for every primary key in a given table
 				for ( String primaryKey : primaryKeys){
 					primaryKeyDataType = allColumnDetails.get(primaryKey);
-					if(primaryKeyDataType == "VARCHAR")
+					if(Utilities.isStringType(primaryKeyDataType))
 					{
 						primaryKeyValue = baseSet.getString(primaryKey);
 					}
-					else if(primaryKeyDataType == "INTEGER"){
+					else if(Utilities.isIntegerType(primaryKeyDataType)){
 						primaryKeyValue = baseSet.getInt(primaryKey);
 					}
-					else if(primaryKeyDataType == "DOUBLE"){
+					else if(Utilities.isDoubleType(primaryKeyDataType)){
 						primaryKeyValue = baseSet.getDouble(primaryKey);
 					}
-					else if(primaryKeyDataType == "NUMBER"){
-						primaryKeyValue = baseSet.getDouble(primaryKey);
-					}
-					else if(primaryKeyDataType == "TIMESTAMP")
+					else if(Utilities.isTimeType(primaryKeyDataType))
 					{
 						primaryKeyValue = baseSet.getTimestamp(primaryKey);
 					}
@@ -197,18 +204,19 @@ public class Anonymize {
 					 * Consider numbers in the below logic
 					 */
 					if (columnDataType != null){
-						if(columnDataType == "VARCHAR"){
+						if(Utilities.isStringType(columnDataType)){
 							//System.out.println();
 							conditionsQuery += (columnName + "=" + "'" + Encrypt.encodeString(baseSet.getString(columnName)) + "' ,");
 						}
-						else if(columnDataType == "INTEGER"){
+						else if(Utilities.isStringType(columnDataType)){
 							conditionsQuery += (columnName + "=" + Integer.toString(Encrypt.encodeInteger(baseSet.getInt(columnName))) + " ,");
 						}
-						else if(columnDataType == "DOUBLE"){
+						else if(Utilities.isDoubleType(columnDataType)){
 							conditionsQuery += (columnName + "=" + Double.toString(Encrypt.encodeDouble(baseSet.getDouble(columnName))) + " ,");
 						}
 						else
 						{
+							errorLogger.write("The datatype "+columnDataType+ " is not supported by your application");
 							System.out.println("Description column not available in table - " + tableName);
 						}
 					}
@@ -251,15 +259,17 @@ public class Anonymize {
 			// The below list contains the column names to be Anonymized
 			List<String> columnsList = new ArrayList<String>();
 			columnsList.add("Description");
-			columnsList.add("Name");
-			columnsList.add("AddressStreet");
-			columnsList.add("FriendlyDescription");
-			columnsList.add("FriendlyFutureDescription");
-			columnsList.add("AccountName");
-			columnsList.add("Quanitity");
-			columnsList.add("CostValueAmountinInstrumentCurrency");
-			columnsList.add("AccountBalanceInAccountCurrency");
-			columnsList.add("AccountBalanceInFundCurrency");
+//			columnsList.add("Name");
+//			columnsList.add("AddressStreet");
+//			columnsList.add("FriendlyDescription");
+//			columnsList.add("FriendlyFutureDescription");
+//			columnsList.add("AccountName");
+//			columnsList.add("Quanitity");
+//			columnsList.add("CostValueAmountinInstrumentCurrency");
+//			columnsList.add("AccountBalanceInAccountCurrency");
+//			columnsList.add("AccountBalanceInFundCurrency");
+			columnsList.add("CompartmentName");
+			columnsList.add("FundName");
 			while (rs.next()){
 				/*
 				 * #TODO: The line beneath is shitty. Look for a better way to retrieve
