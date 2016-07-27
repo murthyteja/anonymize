@@ -1,13 +1,4 @@
-/*
- * Author: Sri Murthy Upadhyayula
- * 
- * BIL ID: XQW9X
- * 
- * Class Description:
- * 				This is the module where the entire process logic for database
- * anonymization resides
- * 
- */
+
 import java.io.UnsupportedEncodingException;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
