@@ -3,7 +3,7 @@ import java.io.InputStream;
 import java.util.Properties;
 
 public class AppProperties {
-	String fileName = "config/config.properties";
+	String fileName = ".\\config.properties";
 	InputStream inputStream;
 	Properties prop = new Properties();
 
