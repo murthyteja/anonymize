@@ -1,13 +1,16 @@
-
 import java.io.UnsupportedEncodingException;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,7 +18,16 @@ import java.util.Map;
 // This is where all the awesome action happens
 public class Anonymize {
 	static Statement statement;
-	static ErrorLogger errorLogger = new ErrorLogger();
+	AppLogger appLogger;
+	AppLogger errorLogger;
+	AppLogger statusLogger;
+
+	public Anonymize(AppLogger appLogger, AppLogger errorLogger, AppLogger statusLogger){
+		this.appLogger = appLogger;
+		this.errorLogger = errorLogger;
+		this.statusLogger = statusLogger;
+	}
+	
 	/*
 	 * Private: Method that anonymizes a row in the database.
 	 * 
@@ -24,14 +36,26 @@ public class Anonymize {
 	 * 			query - The SQL query string that gets executed on the underlying
 	 * 					database. This is usually an update query
 	 */
-	private static boolean anonymizeRow(Connection conn, String query){
+	private boolean anonymizeRow(Connection conn, String query){
 		boolean queryExecutionStatus = false;
 		try{
 			statement = conn.createStatement();
 			queryExecutionStatus = statement.execute(query);
 		}
 		catch(Exception exp){
-			System.out.println("Something went wrong:" + exp.getMessage());
+			//System.out.println("Something went wrong: " + exp.getMessage());
+			//exp.printStackTrace();
+			errorLogger.write("Something went wrong while executing query: " + exp.getMessage());;
+		}
+		finally{
+			try {
+				statement.close();
+			} catch (SQLException e) {
+				// TODO Auto-generated catch block
+				//System.out.println("Something went wrong while closing statement: " + e.getMessage());
+				errorLogger.write("Something went wrong while closing statement: " + e.getMessage());
+				e.printStackTrace();
+			}
 		}
 		return queryExecutionStatus;
 	}
@@ -45,7 +69,7 @@ public class Anonymize {
 	 * 			conditions - A conditional query which basically sets the selected columns data to 
 	 * 						anonymized values
 	 */
-	private static String getUpdateQuery(String tableName, Map<String, Object> primaryKeyValueMap, String conditions){
+	private String getUpdateQuery(String tableName, Map<String, Object> primaryKeyValueMap, String conditions){
 		AppProperties appProperties = new AppProperties();
 		String baseQuery = appProperties.getProperty("UPDATE_CLAUSE") + tableName + appProperties.getProperty("SET_CLAUSE");
 		
@@ -65,18 +89,27 @@ public class Anonymize {
 	 * 			primaryKeyValueMap - This is a HashMap that contains the primary key names
 	 * 								and their values in a given row
 	 */
-	private static String getWhereQuery(Map<String, Object> primaryKeyValueMap){
+	private String getWhereQuery(Map<String, Object> primaryKeyValueMap){
 		AppProperties appProperties = new AppProperties();
 		String baseQuery = appProperties.getProperty("WHERE_CLAUSE");
 		String groupConditionsClause = appProperties.getProperty("GROUP_CONDITIONS_CLAUSE");
 		int primaryKeysCount = primaryKeyValueMap.size();
 
 		for (Map.Entry<String, Object> primaryKeyValueEntry : primaryKeyValueMap.entrySet()) {
-			baseQuery += getConditionForEntry(primaryKeyValueEntry.getKey(), primaryKeyValueEntry.getValue());
-			if(primaryKeysCount > 1 && (primaryKeysCount - 1 ) > 0){
-				baseQuery += groupConditionsClause;
-				primaryKeysCount--;
+			String temp = null;
+			Object temp1 = primaryKeyValueEntry.getValue();
+			if( temp1 != null){
+				temp = primaryKeyValueEntry.getValue().toString();
 			}
+			if(temp != null && !temp.contains("\"") && !temp.contains("\'")){
+				baseQuery += getConditionForEntry(primaryKeyValueEntry.getKey(), primaryKeyValueEntry.getValue());
+				if(primaryKeysCount > 1 && (primaryKeysCount - 1 ) > 0){
+					baseQuery += groupConditionsClause;
+				}
+			}
+			temp = null;
+			temp1 = null;
+			primaryKeysCount--;
 		}
 		return baseQuery;
 	}
@@ -93,29 +126,42 @@ public class Anonymize {
 	 * 			primaryKeyName - Name of the primary key attribute
 	 * 			primaryKeyValue - Value of the primary key attribute in a given row 
 	 */
-	private static String getConditionForEntry(String primaryKeyName, Object primaryKeyValue){
+	private String getConditionForEntry(String primaryKeyName, Object primaryKeyValue){
 		String condition = primaryKeyName + "=";
+		AppProperties appProperties = new AppProperties();
+		int vendorId = Integer.parseInt(appProperties.getProperty("vendor_id"));
 		if(primaryKeyValue instanceof String)
 		{
-			condition += "'" + primaryKeyValue.toString() + "'";
+			if(vendorId == 3){
+				condition = primaryKeyName + appProperties.getProperty("LIKE_CLAUSE");
+			}
+			condition += "\'" + primaryKeyValue.toString() + "\'";
 		}
 		else if(primaryKeyValue instanceof Integer){
 			condition += Integer.parseInt(primaryKeyValue.toString());
+		}
+		else if(primaryKeyValue instanceof Long){
+			condition += Long.parseLong(primaryKeyValue.toString());
 		}
 		else if(primaryKeyValue instanceof Double){
 			condition += Double.parseDouble(primaryKeyValue.toString());
 		}
 		else if(primaryKeyValue instanceof Timestamp)
 		{
-			condition += "'" + primaryKeyValue.toString()  + "'";
+			condition += "\"" + primaryKeyValue.toString()  + "\"";
 		}
 		else if(primaryKeyValue instanceof Time)
 		{
-			condition += "'" + primaryKeyValue.toString() + "'";
+			condition += "\"" + primaryKeyValue.toString() + "\"";
+		}
+		else if(primaryKeyValue instanceof Date)
+		{
+			//condition += "DATE\'" + primaryKeyValue.toString() + "\'";
+			condition += " TO_DATE(\'" + primaryKeyValue.toString() + "\', 'YYYY-MM-DD')";
 		}
 		else
 		{
-			condition += "'" + primaryKeyValue.toString() + "'";
+			condition += "\"" + primaryKeyValue.toString() + "\"";
 		}
 		return condition;
 	}
@@ -129,20 +175,27 @@ public class Anonymize {
 	 * 					  to anonymize
 	 * 		primaryKey - Primary key of the given table
 	 */
-	private static boolean anonymizeTable(Connection conn, String tableName, List<String> columnsList, List<String> primaryKeys) throws UnsupportedEncodingException{
+	private boolean anonymizeTable(Connection conn, String tableName, List<String> columnsList, List<String> primaryKeys) throws UnsupportedEncodingException{
 		AppProperties appProperties = new AppProperties();
+		int vendorId = Integer.parseInt(appProperties.getProperty("vendor_id"));
 		// First frame a result set with all the data in the table
-		System.out.println("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^");
-		System.out.println("Comes here to anonymize: " + tableName);
-		// Frame the base query to get all the records
-		//String sqlQuery = "select * from " + tableName;
+		// System.out.println("Comes here to anonymize: " + tableName);
+		appLogger.write("Comes here to anonymize: " + tableName);
+		// Frame the base query to get all the record
 		String sqlQuery = appProperties.getProperty("SELECT_ALL_CLAUSE") + tableName;
+		int rowNumber = 0;
+		int rowProblems = 0;
 		try {
-			Statement st = conn.createStatement();
-			ResultSet baseSet = st.executeQuery(sqlQuery);
-			System.out.println(sqlQuery);
+			Statement st;
+			ResultSet baseSet;
+			st = conn.createStatement();
+			baseSet = st.executeQuery(sqlQuery);
+			
 			Map<String, String> allColumnDetails = new HashMap<String, String>();
 			if (baseSet != null){
+				appLogger.write("Table: " + tableName +" is not blank..............");
+				statusLogger.write("Started processing: " + tableName);
+				System.out.println("Started processing: " + tableName);
 				ResultSetMetaData rsmd = baseSet.getMetaData();
 				// Feed all the column details before calling anonymizeRow() method
 				int i = 0;
@@ -151,6 +204,7 @@ public class Anonymize {
 					allColumnDetails.put(rsmd.getColumnName(i), rsmd.getColumnTypeName(i));
 				}
 			}
+			
 			/*
 			 * Now here is all the dirty and bulky work. Frame the right update query
 			 * using the primary key and columns information and update the shit right
@@ -162,9 +216,20 @@ public class Anonymize {
 			String columnDataType;
 			String updateQuery = "";
 			Map<String, Object> primaryKeyValueMap = new HashMap<String, Object>();
+			Map<String, Object> currentRecordKeyValueMap = new HashMap<String, Object>();
 			String primaryKeyDataType;
 			Object primaryKeyValue;
+			String currentRecordDataType;
+			Object currentRecordValue;
+			//Statement batchStatement;
+			//batchStatement = conn.createStatement();
+//			conn.setAutoCommit(false);
+			int batchCount = 0;
+			int updatedRecords = 0;
 			while(baseSet.next()){
+				rowNumber++;
+				// If the Map is not cleared, the values just get replaced next time around
+				currentRecordKeyValueMap.clear();
 				// Get the column type information for every primary key in a given table
 				for ( String primaryKey : primaryKeys){
 					primaryKeyDataType = allColumnDetails.get(primaryKey);
@@ -173,7 +238,7 @@ public class Anonymize {
 						primaryKeyValue = baseSet.getString(primaryKey);
 					}
 					else if(Utilities.isIntegerType(primaryKeyDataType)){
-						primaryKeyValue = baseSet.getInt(primaryKey);
+						primaryKeyValue = baseSet.getLong(primaryKey);
 					}
 					else if(Utilities.isDoubleType(primaryKeyDataType)){
 						primaryKeyValue = baseSet.getDouble(primaryKey);
@@ -182,11 +247,54 @@ public class Anonymize {
 					{
 						primaryKeyValue = baseSet.getTimestamp(primaryKey);
 					}
+					else if(Utilities.isDateType(primaryKeyDataType)){
+						primaryKeyValue = baseSet.getDate(primaryKey);
+					}
 					else
 					{
 						primaryKeyValue = baseSet.getString(primaryKey);
 					}
 					primaryKeyValueMap.put(primaryKey, primaryKeyValue);
+				}
+				// Get column value information for every column in a  given table
+				
+				for (String columnName : allColumnDetails.keySet()){
+					currentRecordDataType = allColumnDetails.get(columnName);
+					if(Utilities.isStringType(currentRecordDataType))
+					{
+						currentRecordValue = baseSet.getObject(columnName);
+						if (currentRecordValue != null){
+						  currentRecordValue = baseSet.getString(columnName);
+						}
+					}
+					else if(Utilities.isIntegerType(currentRecordDataType)){
+						currentRecordValue = baseSet.getObject(columnName);
+						if (currentRecordValue != null){
+							currentRecordValue = baseSet.getLong(columnName);
+						}
+					}
+					else if(Utilities.isDoubleType(currentRecordDataType)){
+						currentRecordValue = baseSet.getDouble(columnName);
+					}
+					else if(Utilities.isTimeType(currentRecordDataType))
+					{
+						currentRecordValue = baseSet.getTimestamp(columnName);
+					}
+					else if(Utilities.isDateType(currentRecordDataType))
+					{
+						currentRecordValue = baseSet.getDate(columnName);
+					}
+					else
+					{
+						currentRecordValue = baseSet.getObject(columnName);
+						if (currentRecordValue != null){
+						  currentRecordValue = baseSet.getString(columnName);
+						}
+					}
+
+					if(!Utilities.isDateType(currentRecordDataType) && currentRecordValue != null){
+						currentRecordKeyValueMap.put(columnName, currentRecordValue);
+					}
 				}
 				// Frame conditions query for the given set of columns
 				for(String columnName : columnsList){
@@ -195,36 +303,78 @@ public class Anonymize {
 					 * Consider numbers in the below logic
 					 */
 					if (columnDataType != null){
-						if(Utilities.isStringType(columnDataType)){
-							//System.out.println();
-							conditionsQuery += (columnName + "=" + "'" + Encrypt.encodeString(baseSet.getString(columnName)) + "' ,");
+						if(Utilities.isStringType(columnDataType) || Utilities.isTextType(columnDataType)){
+							if(vendorId == 1){
+								conditionsQuery += (columnName + "=" + "\"" + Encrypt.encodeString(baseSet.getString(columnName)) + "\" ,");
+							}
+							else
+							{
+								// For Oracle and SQL Server DB, we need to use single quotes while specifying strings in conditional statements
+								// For eg: UPDATE FUNDS set FUND_NAME='1asdasd2' where ID=1234;
+								conditionsQuery += (columnName + "=" + "'" + Encrypt.encodeString(baseSet.getString(columnName)) + "' ,");
+							}	
 						}
-						else if(Utilities.isStringType(columnDataType)){
-							conditionsQuery += (columnName + "=" + Integer.toString(Encrypt.encodeInteger(baseSet.getInt(columnName))) + " ,");
+						else if(Utilities.isIntegerType(columnDataType)){
+							conditionsQuery += (columnName + "=" + Long.toString(Encrypt.encodeInteger(baseSet.getInt(columnName))) + " ,");
 						}
 						else if(Utilities.isDoubleType(columnDataType)){
 							conditionsQuery += (columnName + "=" + Double.toString(Encrypt.encodeDouble(baseSet.getDouble(columnName))) + " ,");
 						}
 						else
 						{
-							errorLogger.write("The datatype "+columnDataType+ " is not supported by your application");
-							System.out.println("Description column not available in table - " + tableName);
+							errorLogger.write("The Datatype " +columnDataType + " doesn't have a default masking logic in your application");
 						}
 					}
 				}
 				if(!conditionsQuery.isEmpty()){
-					System.out.println(getUpdateQuery(tableName, primaryKeyValueMap, conditionsQuery));
-					updateQuery = getUpdateQuery(tableName, primaryKeyValueMap, conditionsQuery);
-					@SuppressWarnings("unused")
+					if(primaryKeys.isEmpty()){
+						//System.out.println(getUpdateQuery(tableName, currentRecordKeyValueMap, conditionsQuery));
+						updateQuery = getUpdateQuery(tableName, currentRecordKeyValueMap, conditionsQuery);
+					}
+					else{
+						//System.out.println(getUpdateQuery(tableName, primaryKeyValueMap, conditionsQuery));
+						updateQuery = getUpdateQuery(tableName, primaryKeyValueMap, conditionsQuery);
+					}
+//					@SuppressWarnings("unused")
 					boolean status = anonymizeRow(conn, updateQuery);
+					appLogger.write("Processing Row: " + rowNumber + " With Query: " + updateQuery);
+					conn.commit();
+//					batchCount++;
+//					updatedRecords++;
+//					if (batchCount < 50){
+//						batchStatement.addBatch(updateQuery);
+//					}
+//					if (batchCount == 50){
+//						batchStatement.addBatch(updateQuery);
+//						int [] recordsAffected = batchStatement.executeBatch();
+//						errorLogger.write("Executing batch now");
+//						System.out.println("==================================");
+//						System.out.println(updatedRecords);
+//						System.out.println("==================================");
+//						batchCount = 0;
+//						conn.commit();
+//					}
 				}
 				conditionsQuery = "";
 			}
+			// Do not move the below close statement's from the try block, The baseset and st objects are closed after each table
+			// is processed and their position here is correct.
 			baseSet.close();
+			st.close();
 		} catch (Exception e) {
 			// TODO Auto-generated catch block
-			System.out.println("Something went wrong: " + e.getMessage());
+			//System.out.println("Something went wrong: " + e.getMessage());
 			//e.printStackTrace();
+			rowProblems++;
+			errorLogger.write("Something went in Table: " + tableName + e.getMessage());
+			errorLogger.write("Row Number: " + rowNumber);
+		}
+		finally{
+			//statement.close();
+			statusLogger.write("Finished Processing " + tableName);
+			statusLogger.write("Number of rows with Issues: " + rowProblems);
+			System.out.println("Finished Processing " + tableName);
+			System.out.println("Number of rows with Issues: " + rowProblems);
 		}
 		return true;
 	}
@@ -240,44 +390,16 @@ public class Anonymize {
 	 * 						might have settings data in a table named 'Settings'. We might
 	 * 						want to ignore such tables.
 	 */
-	public static boolean anonymizeDatabase(Connection conn, List<String> ignoreTablesList){
+	public boolean anonymizeDatabase(Connection conn){
 		boolean result = false;
 		try{
 			DatabaseMetaData md = conn.getMetaData();
-			ResultSet rs = md.getTables(null, null, "%", null);
-			System.out.println("Tables to be anonymized are:");
-			List<String> primaryKeys;
-			// The below list contains the column names to be Anonymized
-			List<String> columnsList = new ArrayList<String>();
-			columnsList.add("Description");
-//			columnsList.add("Name");
-//			columnsList.add("AddressStreet");
-//			columnsList.add("FriendlyDescription");
-//			columnsList.add("FriendlyFutureDescription");
-//			columnsList.add("AccountName");
-//			columnsList.add("Quanitity");
-//			columnsList.add("CostValueAmountinInstrumentCurrency");
-//			columnsList.add("AccountBalanceInAccountCurrency");
-//			columnsList.add("AccountBalanceInFundCurrency");
-			columnsList.add("CompartmentName");
-			columnsList.add("FundName");
-			while (rs.next()){
-				/*
-				 * #TODO: The line beneath is shitty. Look for a better way to retrieve
-				 * 		the table name instead of passing the hard coded constant 3
-				 */
-				String tableName = rs.getString(3);
-				primaryKeys = Utilities.getPrimaryKeys(md, tableName);
-
-				/*
-				 * We should not anonymize the tables in Ignored List
-				 * Also, for tables without a primary key(s), do not do anonymization
-				 * # TODO: Think about anonymizing the tables without primary key(s) attribute
-				 * 			defined
-				 */
-				if(!ignoreTablesList.contains(tableName) && !primaryKeys.isEmpty()){
-					anonymizeTable(conn, tableName, columnsList, primaryKeys);
-				}
+			AnonymizationDetails anonymizationDetails = new AnonymizationDetails();
+			ArrayList<String> tables = Collections.list(anonymizationDetails.getTables());
+			for(String tableName : tables){
+				List<String> primaryKeys = Utilities.getPrimaryKeys(md, tableName);
+				List<String> columnsList = Arrays.asList(anonymizationDetails.getColumnNames(tableName));
+				anonymizeTable(conn, tableName, columnsList, primaryKeys);
 			}
 		}
 		catch(Exception exp) {
