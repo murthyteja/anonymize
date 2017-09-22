@@ -34,12 +34,16 @@ public class Anonymize {
 	AppLogger statusLogger;
 	int vendorId;
 	boolean useRowNum;
+	boolean useBatchUpdation;
+	int batchSize;
 	AppProperties appProperties;
 
 	public Anonymize(AppLogger appLogger, AppLogger errorLogger, AppLogger statusLogger){
 		appProperties = new AppProperties();
 		vendorId = Integer.parseInt(appProperties.getProperty("vendor_id"));
 		useRowNum = Boolean.parseBoolean(appProperties.getProperty("use_rownum"));
+		useBatchUpdation = Boolean.parseBoolean(appProperties.getProperty("batch_switch"));
+		batchSize = Integer.parseInt(appProperties.getProperty("batch_size"));
 		this.appLogger = appLogger;
 		this.errorLogger = errorLogger;
 		this.statusLogger = statusLogger;
@@ -433,6 +437,7 @@ public class Anonymize {
 		String sqlQuery = appProperties.getProperty("SELECT_ALL_CLAUSE") + tableName;
 		int rowNumber = 0;
 		int rowProblems = 0;
+		int batchCounter = 0;
 		try {
 			Statement st;
 			ResultSet baseSet;
@@ -542,7 +547,23 @@ public class Anonymize {
 					else{
 						updatePreparedStatementObject = getPreparedStatementForExecutation(updatePreparedStatementObject, allColumnDetails, columnsList, currentRecordKeyValueMap, rowID, primaryKeyValueMap);
 					}
-					updatePreparedStatementObject.execute();
+					
+					/*
+					 * Step 3: Execute the query based on the query execution settings (Update by batch/Update each row)
+					 */
+					if(useBatchUpdation){
+						batchCounter++;
+						if(batchCounter == batchSize){
+							int[] recordsUpdated = updatePreparedStatementObject.executeBatch();
+						}
+						else{
+							updatePreparedStatementObject.addBatch();
+						}
+						
+					}
+					else{
+						updatePreparedStatementObject.execute();
+					}
 				}
 			}
 			else
